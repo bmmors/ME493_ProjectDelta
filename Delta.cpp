@@ -142,25 +142,45 @@ int main() {
 	///Simulation///
 	ship s;
 	s.init();
-
-	//cout << "x:\t" << s.x[i] << "\ty:\t" << s.y[i] << "\ttheta\t" << s.theta[i] << "\tomega\t" << s.omega[i] << endl;
 	///End Simulation///
+
 
 	///Evolution Algorithm///
 	EA e;
-	int num_poly = 50;
+	int num_pop = 50;
 	int num_weights = 10; //to be determined using NN later
-
-	for (int i = 0; i < num_poly; i++) {
-		policy p;
-		p.init(num_weights);
-		e.population.push_back(p);
-	}
-	assert(e.population.size() == num_poly);
 	///End Evolutionary Algorithm///
+
 
 	///Start Full Sim with EA and NN///
 	int max_time = 1000; //max number of time for each simulation
+	int gen = 100; //number of generations
+	int SR = 3; //stat runs
+
+	for (int i = 0; i < SR; i++) { //statistcal run loop
+		//figure out what needs to be cleared before each loop - maybe pop?
+		//initialize population
+		for (int pop_init = 0; pop_init < num_pop; pop_init++) {
+			policy p;
+			p.init(num_weights);
+			e.population.push_back(p);
+		}
+		assert(e.population.size() == num_pop); //check population size
+
+		for (int k = 0; k < gen; k++) { //EA loop
+			//replicate pop - should be size 100
+			for (int nn_loop = 0; nn_loop < e.population.size(); nn_loop){
+				//send n pop to nn -> get u
+				for (int j = 0; j < max_time; j++) { //simulation loop
+					//run simulation with u from nn 1000 times
+					//save fitness to n pop
+					//evaluate
+				}
+			}
+			//deselect
+		}
+	}
+
 	///End Full Sim with EA and NN///
 	return 0;
 }
