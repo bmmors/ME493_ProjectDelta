@@ -27,11 +27,16 @@ public:
 	double boaty;
 	double w; //omega
 	double start_w = 10;
-	double start_o = 1;
+	double start_o = 1.578;
 	double o; //theta
 	double dt = 0.2;
 	double v = 3;
 	double T = 5;
+
+	double x; //y-1/b=x
+	double m; // y2-y1/x2-x1
+	double b; //boaty-m*boatx
+	vector<double> state;
 
 	void init();
 	void updatepos(int u);
@@ -42,7 +47,11 @@ void ship::init() {
 	boaty = y_start;
 	w = start_w;
 	o = start_o;
-}
+
+	state.push_back(boatx);
+	state.push_back(boaty);
+	state.push_back(o);
+ }
 
 void ship::updatepos(int u) {
 	double tx;
@@ -59,6 +68,7 @@ void ship::updatepos(int u) {
 	boaty = ty;
 	o = to;
 	w = tw;
+
 
 	cout << boatx << "," << boaty << endl;
 	//x(t+1)=x(t) + v*sin(theta(t))*dt
@@ -108,17 +118,9 @@ public:
 
 void policy::init(int num_weights) {
 	for (int i = 0; i < num_weights; i++) {
-		int test = rand() % 2; //generate 0 or 1. Zero means + weight 1 means 0 weight
-		assert(test == 0 || test == 1);
-		if (test == 0) {
-			double w = BMMRAND
-				weights.push_back(w);
-		}
-		else if (test == 1) {
-			double w = BMMRAND;
-			w = w * -1;
-			weights.push_back(w);
-		}
+		double w1 = BMMRAND;
+		double w2 = BMMRAND;
+		weights.push_back(w1-w2);
 	}
 	assert(weights.size() == num_weights);
 }
@@ -141,9 +143,11 @@ void policy::mutate(double mm) {
 class EA {
 public:
 	vector<policy> population;
+	double u;
+	bool goal_pass = false;
 
 	void replicate(int num_pop,double mm);
-	void evaluate(int num_pop, int max_time,ship s);
+	void evaluate(int num_pop, int max_time,ship s,neural_network NN,goal g);
 	void downselect();
 };
 
@@ -158,23 +162,39 @@ void EA::replicate(int num_pop,double mm) {
 	}
 }
 
-void EA::evaluate(int num_pop,int max_time,ship s) {
+void EA::evaluate(int num_pop,int max_time,ship s,neural_network NN, goal g) {
 	for (int i = 0; i < population.size();i++) {
 		population.at(i).fitness = -1;
 	}
-	//nn to give u
-	double u1 = 0.898;
-	double u2 = 0.109;
-	for (int k = 0; k < max_time; k++) {
-		s.updatepos(u1);
-	}
-	cout << "Restart" << endl;
-	s.init();
-	for (int k = 0; k < max_time; k++) {
-		s.updatepos(u2);
-	}
+	for (int k = 0; k < population.size(); k++) {
+		NN.set_weights(population.at(k).weights, true);
+		//simulation loop 
+		for (int sim = 0; sim < max_time; sim++) {
+			NN.set_vector_input(s.state);
+			NN.execute();
+			u = NN.get_output(0);
+			cout << "u:" << u << endl;
+			s.updatepos(u);
 
+			if (sim == max_time - 1 && goal_pass == false) {
+				population.at(k).fitness += -100;
+			}
+			else if (s.boatx > 1000 || s.boatx < 0) {
+				population.at(k).fitness += -100;
+			}
+			else if (s.boaty > 1000 || s.boaty < 0) {
+				population.at(k).fitness += -100;
+			}
+			else if (goal_pass = true) {
+				population.at(k).fitness += 10000;
+			}
+			//if passes through goal +10000 fitness
+			//if sim == max_time - 1 && goal == false -100
+			//if x > 1000 fitness -100 || if x < 0 -100
+			//if y > 1000 fitness -100 || if y < 0 -100
 
+		}
+	}
 }
 ////----------End Evolutionary Algorithm----------////
 
@@ -187,15 +207,27 @@ int main() {
 	///Simulation///
 	ship s;
 	s.init();
+	goal g;
+	g.init();
 	///End Simulation///
 
 
 	///Evolution Algorithm///
 	EA e;
 	int num_pop = 50;
-	int num_weights = 10; //to be determined using NN later
 	double mm = 0.2;
 	///End Evolutionary Algorithm///
+
+	///Neural Network///
+	neural_network NN;
+	NN.setup(3, 5, 1);
+	int num_weights = NN.get_number_of_weights();
+	NN.set_in_min_max(0,1000); //x
+	NN.set_in_min_max(0,1000); //y
+	NN.set_in_min_max(0,6.28); //theta
+
+	NN.set_out_min_max(-15,15);
+	///End Neural Network
 
 
 	///Start Full Sim with EA and NN///
@@ -211,7 +243,7 @@ int main() {
 	}
 
 	e.replicate(num_pop, mm);
-	e.evaluate(num_pop, max_time, s);
+	e.evaluate(num_pop, max_time, s, NN,g);
 
 	///End Full Sim with EA and NN///
 	return 0;
