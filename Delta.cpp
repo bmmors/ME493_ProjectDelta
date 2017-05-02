@@ -30,7 +30,7 @@ public:
 	double T = 5;
 
 	void init();
-	void updatepos(int u);
+	void updatepos(double u);
 	void reset();
 };
 
@@ -46,11 +46,11 @@ void ship::init() {
 	omega.push_back(0);
 }
 
-void ship::updatepos(int u) {
-	omega.push_back(omega.at(omega.size()-1) + (u - omega.at(omega.size()-1))*dt / T); // w(t+1)=w(t) + (u-w(t))*dt/T
-	theta.push_back(theta.at(theta.size() - 1) + omega.at(omega.size() - 2) / dt); //theta(t+1)=theta(t)+w(t)*dt
+void ship::updatepos(double u) {
 	x.push_back(x.at(x.size() - 1) + v*sin(theta.at(theta.size() - 2))*dt); //x(t+1)=x(t) + v*sin(theta(t))*dt
 	y.push_back(y.at(y.size() - 1) + v*cos(theta.at(theta.size() - 2))*dt); //y(t+1)=y(t) + v*cos(theta(t))*dt
+	omega.push_back(omega.at(omega.size()-1) + (u - omega.at(omega.size()-1))*dt / T); // w(t+1)=w(t) + (u-w(t))*dt/T
+	theta.push_back(theta.at(theta.size() - 1) + omega.at(omega.size() - 2) / dt); //theta(t+1)=theta(t)+w(t)*dt
 }
 
 void ship::reset() {
@@ -58,7 +58,7 @@ void ship::reset() {
 	theta.clear();
 	x.clear();
 	y.clear();
-
+	cout << "Reset!" << endl;
 	init();
 }
 
@@ -95,27 +95,27 @@ class policy {
 public:
 	vector<double> weights;
 	double fitness;
-	double u;
 
 	void init(int num_weights);
-	void mutate();
+	void mutate(double mut_size);
 };
 
 void policy::init(int num_weights) {
 	for (int i = 0; i < num_weights; i++) {
-		int test = rand() % 2; //generate 0 or 1. Zero means + weight 1 means 0 weight
-		assert(test == 0 || test == 1);
-		if (test == 0) {
-			double w = BMMRAND
-			weights.push_back(w);
-		}
-		else if (test == 1) {
-			double w = BMMRAND;
-			w = w * -1;
-			weights.push_back(w);
-		}
+		double t1 = BMMRAND;
+		double t2 = BMMRAND;
+		weights.push_back(t1 - t2);
 	}
 	assert(weights.size() == num_weights);
+}
+
+void policy::mutate(double mut_size) {
+	int mutate = rand() % weights.size(); //selects how many weights to change
+	for (int i = 0; i < mutate; i++) {
+		int select = rand() % weights.size();
+		weights.at(select) += mut_size * BMMRAND - mut_size * BMMRAND;
+	}
+
 }
 ////----------End Policy Setup----------////
 
@@ -127,60 +127,67 @@ class EA {
 public:
 	vector<policy> population;
 
-	void replicate();
+	void replicate(int pop_size,double mut_size);
 	void evaluate();
 	void downselect();
 };
 
+void EA::replicate(int pop_size, double mut_size) {
+	assert(population.size() == pop_size);
+	int new_pop = pop_size * 2;
+	policy temp;
+	while (population.size() < new_pop) {
+		int select = rand() % pop_size; //select random population
+		temp = population.at(select); 
+		temp.mutate(mut_size);
+		population.push_back(temp);
+		//cout << "pop_size:\t" << population.size() << endl;
+	}
+	assert(population.size() == new_pop);
+}
 ////----------End Evolutionary Algorithm----------////
 
 
 
 
 int main() {
+	srand(time(NULL));
 
-	///Simulation///
+	////----------Simulation----------////
 	ship s;
 	s.init();
-	///End Simulation///
+	////----------End Simulation----------////
 
 
-	///Evolution Algorithm///
+	////----------Evolution Algorithm----------////
 	EA e;
-	int num_pop = 50;
-	int num_weights = 10; //to be determined using NN later
-	///End Evolutionary Algorithm///
+	int num_pop = 1;
+	int num_weights = 1; //to be determined using NN later
+	double mut_size = 0.2;
+	////----------End Evolutionary Algorithm----------////
 
 
-	///Start Full Sim with EA and NN///
-	int max_time = 1000; //max number of time for each simulation
-	int gen = 100; //number of generations
-	int SR = 3; //stat runs
+	////----------NN----------////
 
-	for (int i = 0; i < SR; i++) { //statistcal run loop
-		//figure out what needs to be cleared before each loop - maybe pop?
-		//initialize population
-		for (int pop_init = 0; pop_init < num_pop; pop_init++) {
-			policy p;
-			p.init(num_weights);
-			e.population.push_back(p);
-		}
-		assert(e.population.size() == num_pop); //check population size
+	////----------End NN----------////
 
-		for (int k = 0; k < gen; k++) { //EA loop
-			//replicate pop - should be size 100
-			for (int nn_loop = 0; nn_loop < e.population.size(); nn_loop){
-				//send n pop to nn -> get u
-				for (int j = 0; j < max_time; j++) { //simulation loop
-					//run simulation with u from nn 1000 times
-					//save fitness to n pop
-					//evaluate
-				}
-			}
-			//deselect
-		}
-	}
 
-	///End Full Sim with EA and NN///
+	////----------Start Full Sim with EA and NN----------////
+	int max_time = 10; //max number of time for each simulation
+	int gen = 1; //number of generations
+	int SR = 1; //stat runs
+
+	vector<double> u;
+	u.push_back(0.45);
+	u.push_back(-0.736);
+
+	cout << "\tx:\t" << s.x[0] << "\ty:\t" << s.y[0] << "\tomega\t" << s.omega[0] << "\ttheta\t" << s.theta[0] << endl;
+	s.updatepos(-0.123);
+	cout << "\tx:\t" << s.x[1] << "\ty:\t" << s.y[1] << "\tomega\t" << s.omega[1] << "\ttheta\t" << s.theta[1] << endl;
+	s.updatepos(-0.123);
+	cout << "\tx:\t" << s.x[2] << "\ty:\t" << s.y[2] << "\tomega\t" << s.omega[2] << "\ttheta\t" << s.theta[2] << endl;
+
+	
+	////----------End Full Sim with EA and NN----------////
 	return 0;
 }
