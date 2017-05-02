@@ -21,45 +21,50 @@ using namespace std;
 ////----------Simulation Setup----------////
 class ship {
 public:
-	vector<double> x;
-	vector<double> y;
-	vector<double> theta;
-	vector<double> omega;
+	double x_start = 1;
+	double y_start = 1;
+	double boatx;
+	double boaty;
+	double w; //omega
+	double start_w = 10;
+	double start_o = 1;
+	double o; //theta
 	double dt = 0.2;
 	double v = 3;
 	double T = 5;
 
 	void init();
-	void updatepos(double u);
-	void reset();
+	void updatepos(int u);
 };
 
 void ship::init() {
-	assert(x.size() == 0);
-	assert(y.size() == 0);
-	assert(omega.size() == 0);
-	assert(theta.size() == 0);
-
-	x.push_back(150);
-	y.push_back (150);
-	theta.push_back(90);
-	omega.push_back(0);
+	boatx = x_start;
+	boaty = y_start;
+	w = start_w;
+	o = start_o;
 }
 
-void ship::updatepos(double u) {
-	x.push_back(x.at(x.size() - 1) + v*sin(theta.at(theta.size() - 2))*dt); //x(t+1)=x(t) + v*sin(theta(t))*dt
-	y.push_back(y.at(y.size() - 1) + v*cos(theta.at(theta.size() - 2))*dt); //y(t+1)=y(t) + v*cos(theta(t))*dt
-	omega.push_back(omega.at(omega.size()-1) + (u - omega.at(omega.size()-1))*dt / T); // w(t+1)=w(t) + (u-w(t))*dt/T
-	theta.push_back(theta.at(theta.size() - 1) + omega.at(omega.size() - 2) / dt); //theta(t+1)=theta(t)+w(t)*dt
-}
+void ship::updatepos(int u) {
+	double tx;
+	double ty;
+	double to;
+	double tw;
 
-void ship::reset() {
-	omega.clear();
-	theta.clear();
-	x.clear();
-	y.clear();
-	cout << "Reset!" << endl;
-	init();
+	tx = boatx + v*sin(o)*dt;
+	ty = boaty + v*cos(o)*dt;
+	to = o + (w*dt);
+	tw = w + ((u - w)*dt) / T;
+
+	boatx = tx;
+	boaty = ty;
+	o = to;
+	w = tw;
+
+	cout << boatx << "," << boaty << endl;
+	//x(t+1)=x(t) + v*sin(theta(t))*dt
+	//y(t+1)=y(t) + v*cos(theta(t))*dt
+	//w(t+1)=w(t) + (u-w(t))*dt/T
+	//theta(t+1)=theta(t)+w(t)*dt
 }
 
 ////----------End Simulation Setup----------////
@@ -95,28 +100,38 @@ class policy {
 public:
 	vector<double> weights;
 	double fitness;
+	double u;
 
 	void init(int num_weights);
-	void mutate(double mut_size);
+	void mutate(double mm);
 };
 
 void policy::init(int num_weights) {
 	for (int i = 0; i < num_weights; i++) {
-		double t1 = BMMRAND;
-		double t2 = BMMRAND;
-		weights.push_back(t1 - t2);
+		int test = rand() % 2; //generate 0 or 1. Zero means + weight 1 means 0 weight
+		assert(test == 0 || test == 1);
+		if (test == 0) {
+			double w = BMMRAND
+				weights.push_back(w);
+		}
+		else if (test == 1) {
+			double w = BMMRAND;
+			w = w * -1;
+			weights.push_back(w);
+		}
 	}
 	assert(weights.size() == num_weights);
 }
 
-void policy::mutate(double mut_size) {
-	int mutate = rand() % weights.size(); //selects how many weights to change
-	for (int i = 0; i < mutate; i++) {
-		int select = rand() % weights.size();
-		weights.at(select) += mut_size * BMMRAND - mut_size * BMMRAND;
+void policy::mutate(double mm) {
+	int num_mutate = rand() % 5; //mutate up to 5 weights?
+	for (int i = 0; i < num_mutate; i++) {
+		int index = rand() % weights.size();
+		double nweight = mm*BMMRAND - mm*BMMRAND;
+		weights.at(index) += nweight;
 	}
-
 }
+
 ////----------End Policy Setup----------////
 
 
@@ -127,23 +142,39 @@ class EA {
 public:
 	vector<policy> population;
 
-	void replicate(int pop_size,double mut_size);
-	void evaluate();
+	void replicate(int num_pop,double mm);
+	void evaluate(int num_pop, int max_time,ship s);
 	void downselect();
 };
 
-void EA::replicate(int pop_size, double mut_size) {
-	assert(population.size() == pop_size);
-	int new_pop = pop_size * 2;
-	policy temp;
-	while (population.size() < new_pop) {
-		int select = rand() % pop_size; //select random population
-		temp = population.at(select); 
-		temp.mutate(mut_size);
+void EA::replicate(int num_pop,double mm) {
+	assert(population.size() == num_pop);
+	while (population.size() < num_pop * 2) {
+		policy temp;
+		int select = rand() % population.size();
+		temp = population.at(select);
+		temp.mutate(mm);
 		population.push_back(temp);
-		//cout << "pop_size:\t" << population.size() << endl;
 	}
-	assert(population.size() == new_pop);
+}
+
+void EA::evaluate(int num_pop,int max_time,ship s) {
+	for (int i = 0; i < population.size();i++) {
+		population.at(i).fitness = -1;
+	}
+	//nn to give u
+	double u1 = 0.898;
+	double u2 = 0.109;
+	for (int k = 0; k < max_time; k++) {
+		s.updatepos(u1);
+	}
+	cout << "Restart" << endl;
+	s.init();
+	for (int k = 0; k < max_time; k++) {
+		s.updatepos(u2);
+	}
+
+
 }
 ////----------End Evolutionary Algorithm----------////
 
@@ -153,41 +184,35 @@ void EA::replicate(int pop_size, double mut_size) {
 int main() {
 	srand(time(NULL));
 
-	////----------Simulation----------////
+	///Simulation///
 	ship s;
 	s.init();
-	////----------End Simulation----------////
+	///End Simulation///
 
 
-	////----------Evolution Algorithm----------////
+	///Evolution Algorithm///
 	EA e;
-	int num_pop = 1;
-	int num_weights = 1; //to be determined using NN later
-	double mut_size = 0.2;
-	////----------End Evolutionary Algorithm----------////
+	int num_pop = 50;
+	int num_weights = 10; //to be determined using NN later
+	double mm = 0.2;
+	///End Evolutionary Algorithm///
 
 
-	////----------NN----------////
-
-	////----------End NN----------////
-
-
-	////----------Start Full Sim with EA and NN----------////
+	///Start Full Sim with EA and NN///
 	int max_time = 10; //max number of time for each simulation
-	int gen = 1; //number of generations
-	int SR = 1; //stat runs
+	int gen = 100; //number of generations
+	int SR = 3; //stat runs
 
-	vector<double> u;
-	u.push_back(0.45);
-	u.push_back(-0.736);
+	while (e.population.size() < num_pop) {
+		policy p;
+		p.init(num_pop);
+		e.population.push_back(p);
+		//cout << e.population.size() << endl;
+	}
 
-	cout << "\tx:\t" << s.x[0] << "\ty:\t" << s.y[0] << "\tomega\t" << s.omega[0] << "\ttheta\t" << s.theta[0] << endl;
-	s.updatepos(-0.123);
-	cout << "\tx:\t" << s.x[1] << "\ty:\t" << s.y[1] << "\tomega\t" << s.omega[1] << "\ttheta\t" << s.theta[1] << endl;
-	s.updatepos(-0.123);
-	cout << "\tx:\t" << s.x[2] << "\ty:\t" << s.y[2] << "\tomega\t" << s.omega[2] << "\ttheta\t" << s.theta[2] << endl;
+	e.replicate(num_pop, mm);
+	e.evaluate(num_pop, max_time, s);
 
-	
-	////----------End Full Sim with EA and NN----------////
+	///End Full Sim with EA and NN///
 	return 0;
 }
