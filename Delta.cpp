@@ -18,6 +18,32 @@ using namespace std;
 
 #define BMMRAND (double)rand()/RAND_MAX;
 
+
+////----------Goal Setup----------////
+class goal {
+public:
+	///To be randomized later
+	vector<double> x;
+	vector<double> y;
+	vector<double> mid;
+
+	void init();
+};
+
+void goal::init() {
+	x.push_back(900);
+	x.push_back(950);
+
+	y.push_back(900);
+	y.push_back(900);
+
+	mid.push_back((x.at(0) + x.at(1)) / 2);
+	mid.push_back((y.at(0) + y.at(1)) / 2);
+
+	//makes goal start at (900,900) and go to (950,900)
+}
+////----------End Goal Setup----------////
+
 ////----------Simulation Setup----------////
 class ship {
 public:
@@ -32,28 +58,32 @@ public:
 	double dt = 0.2;
 	double v = 3;
 	double T = 5;
+	bool goal_pass;
+	double fitness;
 
 	double x; //y-1/b=x
 	double m; // y2-y1/x2-x1
 	double b; //boaty-m*boatx
 	vector<double> state;
 
-	void init();
-	void updatepos(int u);
+	void init(goal g);
+	void updatepos(int u,goal g);
 };
 
-void ship::init() {
+void ship::init(goal g) {
 	boatx = x_start;
 	boaty = y_start;
 	w = start_w;
 	o = start_o;
+	goal_pass = false;
 
 	state.push_back(boatx);
 	state.push_back(boaty);
 	state.push_back(o);
+	fitness = sqrt(((boatx - g.mid.at(0))*(boatx - g.mid.at(0))) + ((boaty - g.mid.at(1))*(boaty - g.mid.at(1)))); //calc distance from boat to midpoint of goal.
  }
 
-void ship::updatepos(int u) {
+void ship::updatepos(int u,goal g) {
 	double tx;
 	double ty;
 	double to;
@@ -64,11 +94,33 @@ void ship::updatepos(int u) {
 	to = o + (w*dt);
 	tw = w + ((u - w)*dt) / T;
 
+	m = (ty - boaty) / (tx - boatx);
+	b = (ty - m*tx);
+	x = (900 - b) / m;
+
+	//minimize fitness
+	fitness = fitness - sqrt(((tx - g.mid.at(0))*(tx - g.mid.at(0))) + ((ty - g.mid.at(1))*(ty - g.mid.at(1))));
+	if (x >= 900 && x <= 950) {
+		if (boatx < 900 && ty > 900) { //crossing goal from bottom to top
+			//goal passed 
+			fitness += -100; //since we are minimizing fitness give it a negative reward for finding the goal
+		}
+		if (boatx > 900 && ty <900) { //crossing goal from top to bottom
+			//goal passed 
+			fitness += -100; //since we are minimizing fitness give it a negative reward for finding the goal
+		}
+	}
+	if (tx > 1000 || tx < 0) {
+		fitness += 100; //out of bounds = not ideal soln
+	}
+	if (ty > 1000 || ty < 0) {
+		fitness += 100; //out of bounds = not ideal soln
+	}
+	
 	boatx = tx;
 	boaty = ty;
 	o = to;
 	w = tw;
-
 
 	cout << boatx << "," << boaty << endl;
 	//x(t+1)=x(t) + v*sin(theta(t))*dt
@@ -79,29 +131,6 @@ void ship::updatepos(int u) {
 
 ////----------End Simulation Setup----------////
 
-
-
-
-////----------Goal Setup----------////
-class goal {
-public:
-	///To be randomized later
-	vector<double> x;
-	vector<double> y;
-
-	void init();
-};
-
-void goal::init() {
-	x.push_back(900);
-	x.push_back(950);
-
-	y.push_back(900);
-	y.push_back(900);
-
-	//makes goal start at (900,900) and go to (950,900)
-}
-////----------End Goal Setup----------////
 
 
 
@@ -133,7 +162,6 @@ void policy::mutate(double mm) {
 		weights.at(index) += nweight;
 	}
 }
-
 ////----------End Policy Setup----------////
 
 
@@ -144,11 +172,10 @@ class EA {
 public:
 	vector<policy> population;
 	double u;
-	bool goal_pass = false;
 
 	void replicate(int num_pop,double mm);
 	void evaluate(int num_pop, int max_time,ship s,neural_network NN,goal g);
-	void downselect();
+	vector<policy> downselect(int num_pop);
 };
 
 void EA::replicate(int num_pop,double mm) {
@@ -163,9 +190,6 @@ void EA::replicate(int num_pop,double mm) {
 }
 
 void EA::evaluate(int num_pop,int max_time,ship s,neural_network NN, goal g) {
-	for (int i = 0; i < population.size();i++) {
-		population.at(i).fitness = -1;
-	}
 	for (int k = 0; k < population.size(); k++) {
 		NN.set_weights(population.at(k).weights, true);
 		//simulation loop 
@@ -174,27 +198,36 @@ void EA::evaluate(int num_pop,int max_time,ship s,neural_network NN, goal g) {
 			NN.execute();
 			u = NN.get_output(0);
 			cout << "u:" << u << endl;
-			s.updatepos(u);
-
-			if (sim == max_time - 1 && goal_pass == false) {
-				population.at(k).fitness += -100;
-			}
-			else if (s.boatx > 1000 || s.boatx < 0) {
-				population.at(k).fitness += -100;
-			}
-			else if (s.boaty > 1000 || s.boaty < 0) {
-				population.at(k).fitness += -100;
-			}
-			else if (goal_pass = true) {
-				population.at(k).fitness += 10000;
-			}
-			//if passes through goal +10000 fitness
-			//if sim == max_time - 1 && goal == false -100
-			//if x > 1000 fitness -100 || if x < 0 -100
-			//if y > 1000 fitness -100 || if y < 0 -100
+			s.updatepos(u,g);
 
 		}
 	}
+}
+
+vector<policy> EA::downselect(int num_pop) {
+	vector<policy> new_pop;
+	while (new_pop.size() < num_pop) {
+		int rand1 = rand() % population.size();
+		int rand2 = rand() % population.size();
+		if (rand1 == rand2) {
+			int rand1 = rand() % population.size();
+		}
+
+		double fit1 = population.at(rand1).fitness;
+		double fit2 = population.at(rand2).fitness;
+
+		if (fit1 < fit2) {
+			//fit 1 wins
+			new_pop.push_back(population.at(rand1));
+		}
+		if (fit2 < fit1) {
+			//fit 2 wins
+			new_pop.push_back(population.at(rand1));
+		}
+	}
+	assert(new_pop.size() == num_pop);
+
+	return new_pop;
 }
 ////----------End Evolutionary Algorithm----------////
 
@@ -205,10 +238,10 @@ int main() {
 	srand(time(NULL));
 
 	///Simulation///
-	ship s;
-	s.init();
 	goal g;
 	g.init();
+	ship s;
+	s.init(g);
 	///End Simulation///
 
 
@@ -235,15 +268,19 @@ int main() {
 	int gen = 100; //number of generations
 	int SR = 3; //stat runs
 
-	while (e.population.size() < num_pop) {
-		policy p;
-		p.init(num_pop);
-		e.population.push_back(p);
-		//cout << e.population.size() << endl;
+	for (int i = 0; i < SR; i++) {
+		while (e.population.size() < num_pop) {
+			policy p;
+			p.init(num_pop);
+			e.population.push_back(p);
+			//cout << e.population.size() << endl;
+		}
+		for (int k = 0; k < gen; k++) {
+			e.replicate(num_pop, mm);
+			e.evaluate(num_pop, max_time, s, NN, g);
+			e.population = e.downselect(num_pop);
+		}
 	}
-
-	e.replicate(num_pop, mm);
-	e.evaluate(num_pop, max_time, s, NN,g);
 
 	///End Full Sim with EA and NN///
 	return 0;
