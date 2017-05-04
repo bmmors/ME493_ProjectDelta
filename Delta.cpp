@@ -122,7 +122,7 @@ void ship::updatepos(int u,goal g) {
 	o = to;
 	w = tw;
 
-	cout << boatx << "," << boaty << endl;
+	//cout << boatx << "," << boaty << endl;
 	//x(t+1)=x(t) + v*sin(theta(t))*dt
 	//y(t+1)=y(t) + v*cos(theta(t))*dt
 	//w(t+1)=w(t) + (u-w(t))*dt/T
@@ -175,7 +175,7 @@ public:
 
 	void replicate(int num_pop,double mm);
 	void evaluate(int num_pop, int max_time,ship s,neural_network NN,goal g);
-	vector<policy> downselect(int num_pop);
+	vector<policy> downselect(int num_pop,int mm);
 };
 
 void EA::replicate(int num_pop,double mm) {
@@ -190,6 +190,8 @@ void EA::replicate(int num_pop,double mm) {
 }
 
 void EA::evaluate(int num_pop,int max_time,ship s,neural_network NN, goal g) {
+	int sim_count = 0;
+	assert(population.size() == num_pop * 2);
 	for (int k = 0; k < population.size(); k++) {
 		NN.set_weights(population.at(k).weights, true);
 		//simulation loop 
@@ -197,16 +199,18 @@ void EA::evaluate(int num_pop,int max_time,ship s,neural_network NN, goal g) {
 			NN.set_vector_input(s.state);
 			NN.execute();
 			u = NN.get_output(0);
-			cout << "u:" << u << endl;
+			//cout << "u:" << u << endl;
 			s.updatepos(u,g);
-
+			//cout << sim << endl;
+			sim_count++;
 		}
+		//cout << "sim count:" << sim_count <<endl;
 	}
 }
 
-vector<policy> EA::downselect(int num_pop) {
+vector<policy> EA::downselect(int num_pop,int mm) {
 	vector<policy> new_pop;
-	while (new_pop.size() < num_pop) {
+	while (new_pop.size() < num_pop*2){
 		int rand1 = rand() % population.size();
 		int rand2 = rand() % population.size();
 		if (rand1 == rand2) {
@@ -216,6 +220,12 @@ vector<policy> EA::downselect(int num_pop) {
 		double fit1 = population.at(rand1).fitness;
 		double fit2 = population.at(rand2).fitness;
 
+		//while (fit1 == fit2) {
+			//population.at(rand1).mutate(mm);
+			//fit1 = population.at(rand1).fitness;
+		//}
+		cout << fit1 << "\t" << fit2 << endl;
+
 		if (fit1 < fit2) {
 			//fit 1 wins
 			new_pop.push_back(population.at(rand1));
@@ -224,6 +234,8 @@ vector<policy> EA::downselect(int num_pop) {
 			//fit 2 wins
 			new_pop.push_back(population.at(rand1));
 		}
+		//cout << new_pop.size() << endl;
+		
 	}
 	assert(new_pop.size() == num_pop);
 
@@ -264,22 +276,26 @@ int main() {
 
 
 	///Start Full Sim with EA and NN///
-	int max_time = 10; //max number of time for each simulation
+	int max_time = 100; //max number of time for each simulation
 	int gen = 100; //number of generations
-	int SR = 3; //stat runs
+	int SR = 1; //stat runs
 
 	for (int i = 0; i < SR; i++) {
+		assert(e.population.size() == 0);
 		while (e.population.size() < num_pop) {
 			policy p;
-			p.init(num_pop);
+			p.init(num_weights);
 			e.population.push_back(p);
 			//cout << e.population.size() << endl;
 		}
+		cout << "exit population loop" << endl;
 		for (int k = 0; k < gen; k++) {
 			e.replicate(num_pop, mm);
 			e.evaluate(num_pop, max_time, s, NN, g);
-			e.population = e.downselect(num_pop);
+			e.population = e.downselect(num_pop,mm);
 		}
+		e.population.clear();
+		assert(e.population.size() == 0);
 	}
 
 	///End Full Sim with EA and NN///
