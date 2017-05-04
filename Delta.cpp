@@ -80,7 +80,10 @@ void ship::init(goal g) {
 	state.push_back(boatx);
 	state.push_back(boaty);
 	state.push_back(o);
-	fitness = sqrt(((boatx - g.mid.at(0))*(boatx - g.mid.at(0))) + ((boaty - g.mid.at(1))*(boaty - g.mid.at(1)))); //calc distance from boat to midpoint of goal.
+
+	double x2_x1 = g.mid.at(0) - boatx;
+	double y2_y1 = g.mid.at(1) - boaty;
+	fitness = sqrt((x2_x1*x2_x1)+(y2_y1*y2_y1)); //calc distance from boat to midpoint of goal.
  }
 
 void ship::updatepos(int u,goal g) {
@@ -99,21 +102,28 @@ void ship::updatepos(int u,goal g) {
 	x = (900 - b) / m;
 
 	//minimize fitness
-	fitness = fitness - sqrt(((tx - g.mid.at(0))*(tx - g.mid.at(0))) + ((ty - g.mid.at(1))*(ty - g.mid.at(1))));
+	double x2_x1 = g.mid.at(0) - tx;
+	double y2_y1 = g.mid.at(1) - ty;
+	fitness = sqrt((x2_x1*x2_x1) + (y2_y1*y2_y1)); //calc distance from boat to midpoint of goal.
+	//cout << "fit:\t" << fitness << endl;
+	//cout << "x:\t" << x << "\tb:\t" << b << "\tm:\t" << m << endl;
 	if (x >= 900 && x <= 950) {
+		//cout << "on the way!" << endl;
 		if (boatx < 900 && ty > 900) { //crossing goal from bottom to top
-			//goal passed 
+			//cout << "goal passed" << endl;
 			fitness += -100; //since we are minimizing fitness give it a negative reward for finding the goal
 		}
 		if (boatx > 900 && ty <900) { //crossing goal from top to bottom
-			//goal passed 
+			//cout << "goal passed" << endl;
 			fitness += -100; //since we are minimizing fitness give it a negative reward for finding the goal
 		}
 	}
 	if (tx > 1000 || tx < 0) {
+		//cout << "out of bounds" << endl;
 		fitness += 100; //out of bounds = not ideal soln
 	}
 	if (ty > 1000 || ty < 0) {
+		//cout << "out of bounds" << endl;
 		fitness += 100; //out of bounds = not ideal soln
 	}
 	
@@ -158,7 +168,12 @@ void policy::mutate(double mm) {
 	int num_mutate = rand() % 5; //mutate up to 5 weights?
 	for (int i = 0; i < num_mutate; i++) {
 		int index = rand() % weights.size();
-		double nweight = mm*BMMRAND - mm*BMMRAND;
+		double mut1 = mm*BMMRAND;
+		double mut2 = mm*BMMRAND;
+		
+		//cout << mut1 << "\t" << mut2 << endl;
+		double nweight = (mm*mut1) - (mm*mut2);
+		//cout << "nweight" << nweight << endl;
 		weights.at(index) += nweight;
 	}
 }
@@ -175,7 +190,7 @@ public:
 
 	void replicate(int num_pop,double mm);
 	void evaluate(int num_pop, int max_time,ship s,neural_network NN,goal g);
-	vector<policy> downselect(int num_pop,int mm);
+	vector<policy> downselect(int num_pop,double mm);
 };
 
 void EA::replicate(int num_pop,double mm) {
@@ -201,6 +216,13 @@ void EA::evaluate(int num_pop,int max_time,ship s,neural_network NN, goal g) {
 			u = NN.get_output(0);
 			//cout << "u:" << u << endl;
 			s.updatepos(u,g);
+			population.at(k).fitness = s.fitness;
+			if (s.boatx > 1000 || s.boaty < 0) {
+				break;
+			}
+			if (s.boaty > 1000 || s.boaty > 0) {
+				break;
+			}
 			//cout << sim << endl;
 			sim_count++;
 		}
@@ -208,9 +230,9 @@ void EA::evaluate(int num_pop,int max_time,ship s,neural_network NN, goal g) {
 	}
 }
 
-vector<policy> EA::downselect(int num_pop,int mm) {
+vector<policy> EA::downselect(int num_pop,double mm) {
 	vector<policy> new_pop;
-	while (new_pop.size() < num_pop*2){
+	while (new_pop.size() < num_pop){
 		int rand1 = rand() % population.size();
 		int rand2 = rand() % population.size();
 		if (rand1 == rand2) {
@@ -220,11 +242,12 @@ vector<policy> EA::downselect(int num_pop,int mm) {
 		double fit1 = population.at(rand1).fitness;
 		double fit2 = population.at(rand2).fitness;
 
-		//while (fit1 == fit2) {
-			//population.at(rand1).mutate(mm);
-			//fit1 = population.at(rand1).fitness;
-		//}
-		cout << fit1 << "\t" << fit2 << endl;
+		/*while (fit1 == fit2) {
+			//cout << "equal" << endl;
+			population.at(rand1).mutate(mm);
+			fit1 = population.at(rand1).fitness;
+		}*/
+		//cout << fit1 << "\t" << fit2 << endl;
 
 		if (fit1 < fit2) {
 			//fit 1 wins
@@ -237,6 +260,7 @@ vector<policy> EA::downselect(int num_pop,int mm) {
 		//cout << new_pop.size() << endl;
 		
 	}
+	cout << "exitloop" << endl;
 	assert(new_pop.size() == num_pop);
 
 	return new_pop;
@@ -276,17 +300,21 @@ int main() {
 
 
 	///Start Full Sim with EA and NN///
-	int max_time = 100; //max number of time for each simulation
-	int gen = 100; //number of generations
-	int SR = 1; //stat runs
+	int max_time = 1000; //max number of time for each simulation
+	int gen = 300; //number of generations
+	int SR = 10; //stat runs
 
 	for (int i = 0; i < SR; i++) {
 		assert(e.population.size() == 0);
 		while (e.population.size() < num_pop) {
 			policy p;
 			p.init(num_weights);
+			//for (int pp = 0; pp < num_weights; pp++) {
+				//cout << p.weights.at(pp);
+			//}
+			//cout << "new pop" << endl;
 			e.population.push_back(p);
-			//cout << e.population.size() << endl;
+			//cout << e.population.fitness << endl;
 		}
 		cout << "exit population loop" << endl;
 		for (int k = 0; k < gen; k++) {
